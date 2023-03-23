@@ -1,0 +1,269 @@
+#install all the packages needed 3/9/2023
+install.packages("tidyverse")
+install.packages("lubridate")
+install.packages("ggpplot")
+installed.packages("readr")
+install.packages("dplyr")
+install.packages("data.table")
+install.packages("vitae")
+install.packages("scales")
+# Not needed install.packages("here")
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(data.table)
+library(rmarkdown)
+library(scales)
+# Not needed library(here)
+
+# Read uploaded data into 
+data <- read.csv(file.choose(), header = TRUE)
+
+trip_202203 <- read.csv(file.choose(), header = TRUE)
+trip_202204 <- read.csv(file.choose(), header = TRUE)
+trip_202205 <- read.csv(file.choose(), header = TRUE)
+trip_202206 <- read.csv(file.choose(), header = TRUE)
+trip_202207 <- read.csv(file.choose(), header = TRUE)
+trip_202208 <- read.csv(file.choose(), header = TRUE)
+trip_202209 <- read.csv(file.choose(), header = TRUE)
+trip_202210 <- read.csv(file.choose(), header = TRUE)
+trip_202211 <- read.csv(file.choose(), header = TRUE)
+trip_202212 <- read.csv(file.choose(), header = TRUE)
+trip_202301 <- read.csv(file.choose(), header = TRUE)
+trip_202302 <- read.csv(file.choose(), header = TRUE)
+
+# Verify all columns are the same
+colnames(trip_202203)
+colnames(trip_202204)
+colnames(trip_202205)
+colnames(trip_202206)
+colnames(trip_202207)
+colnames(trip_202208)
+colnames(trip_202209)
+colnames(trip_202210)
+colnames(trip_202211)
+colnames(trip_202212)
+colnames(trip_202301)
+colnames(trip_202302)
+# All columns match with correct number of variables(13)
+
+# Combining Datasets 
+all_trips <- rbind(trip_202203,trip_202204,trip_202205,trip_202206,trip_202207,trip_202208,trip_202209,
+                   trip_202210,trip_202211,trip_202212,trip_202301,trip_202302)
+
+q1_trips <- rbind(trip_202203,trip_202204,trip_202205)
+q2_trips <- rbind(trip_202206,trip_202207,trip_202208)
+q3_trips <- rbind(trip_202209,trip_202210,trip_202211)
+q4_trips <- rbind(trip_202212,trip_202301,trip_202302)
+
+head(all_trips)
+
+# Need to export new data set due to ram limits
+getwd()
+write.csv(all_trips, file = "all_trips.csv")
+
+write.csv(q1_trips, file = "q1_trips.csv")
+write.csv(q2_trips, file = "q2_trips.csv")
+write.csv(q3_trips, file = "q3_trips.csv")
+write.csv(q4_trips, file = "q4_trips.csv")
+
+# Convert 
+colnames(all_trips)
+summarize(all_trips)
+all_trips<-mutate(all_trips, ride_id = as.character(ride_id)
+                  ,rideable_type = as.character(rideable_type))
+#Removing unneeded columns
+all_trips <- all_trips %>%  
+  select(-c(start_lat, start_lng, end_lat, end_lng,))
+colnames(all_trips)
+
+#clean up and Add Data to prepare for analysis
+nrow(all_trips)  #results=5,829,084  rows
+dim(all_trips)   #results=9 columns 
+head(all_trips)  #See the first 6 rows of data frame.
+tail(all_trips)  #See the last 6 rows of data frame.
+str(all_trips)   #See list of columns and data types (numeric, character, etc)
+summary(all_trips)#Statistical summary of data. Mainly for numerics
+
+#Search for wrong variables in member_casual column
+filtered_subcriber <- filter(all_trips, member_casual=="Subscriber")
+head(filtered_subcriber)
+filtered_casual <- filter(all_trips, member_casual=="casual")
+head(filtered_casual)
+filtered_customer <- filter(all_trips, member_casual=="Customer")
+head(filtered_customer)
+
+#Following function not needed because "Subscriber" and "Customer" are not present
+all_trips <-  all_trips %>%
+  mutate(member_casual = recode(member_casual
+                              ,"Subscriber" = "member"
+                              ,"Customer" = "casual"))
+# Check to make sure the proper number of observations were reassigned
+table(all_trips$member_casual)
+2365120+3463964 #Number of observations adds up to 5,829,084 (is correct)
+
+#Add columns that list the hour, day, dayofweek, date, month, and year of each ride
+# This will allow us to aggregate ride data for each month, day, or year ... before completing these operations we could only aggregate at the ride level
+#https://www.statmethods.net/input/dates.htmlall_trips$date <- as.Date(all_trips$started_at) 
+all_trips$month <- format(as.Date(all_trips$date), "%B")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+all_trips$time <- format(as.POSIXct(all_trips$date), format = "%H:%M:%S")  # Extract hours, minutes & seconds
+all_trips$hour <- format(as.POSIXct(all_trips$date), format = "%H")   # Extract hours
+                        
+
+colnames(all_trips)
+
+# Add a "ride_length" calculation to all_trips (in seconds)
+# https://stat.ethz.ch/R-manual/R-devel/library/base/html/difftime.html
+all_trips$ride_length <- difftime(all_trips$ended_at,all_trips$started_at)
+str(all_trips)
+
+# Convert "ride_length" from Factor to numeric so we can run calculations on the data
+is.factor(all_trips$ride_length) #Results: False
+all_trips$ride_length <- as.numeric(as.character(all_trips$ride_length))
+is.numeric(all_trips$ride_length) #Results: True
+
+# Remove "bad" data
+# The dataframe includes a few hundred entries when bikes were taken out of docks and checked for quality by Divvy or ride_length was negative
+# First filtering to see if there are any ride_lengths less that 0.
+filtered_neg_trips <- filter(all_trips, ride_length <0)
+head(filtered_neg_trips) #There are
+filtered_HQ_QR_station <- filter(start_station_name == "HQ QR")
+# start_station_name "HQ QR" Not found
+filtered_test_stations <- filter(all_trips, start_station_name == "*test*")
+head(filtered_test_stations)
+
+#Double Checking to see if HQ QR or derivation of the name can be found in data
+start_station_name_Column <- all_trips$start_station_name #creating a vector with just start_station_name column
+head(start_station_name_Column)
+length(start_station_name_Column)  #counting number of columns
+start_station_name_Unique <- unique(start_station_name_Column)
+length(start_station_name_Unique) #counting number of unique columns. Results equal 1693
+all_trips %>% 
+  filter(grepl("H", start_station_name)) #searching for stations that have "H" in name. None match HQ QR
+all_trips %>% 
+  filter(grepl(NA, start_station_name))
+all_trips %>% 
+  filter(grepl("  ", start_station_name))
+#Conclusion is that "HQ QR" station does not exist in data but negative ride_lengths do exist. 
+
+# We will create a new version of the dataframe (v2) since data is being removed
+all_trips_v2 <- all_trips[!(all_trips$start_station_name == "HQ QR" | all_trips$ride_length<0),]
+head(all_trips_v2)
+colnames(all_trips_v2)
+
+# Rearrange columns for better visual
+all_trips_v2 <- all_trips_v2[, c(1, 2, 9, 3, 4, 5, 6, 7, 8, 15, 10, 16, 17, 14, 12, 11, 13)]
+
+#Descriptive Analysis
+mean(all_trips_v2$ride_length) #straight average result: 1153.238
+median(all_trips_v2$ride_length) #midpoint result: 609
+max(all_trips_v2$ride_length) #longest ride result: 2483235
+min(all_trips_v2$ride_length) #shortest ride result: 0
+summary(all_trips_v2$ride_length) #same as above to include 1st Qu. result: 344 & 3rd Qu. result: 1094
+
+# Compare members and casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = mean) #casual = 1736.726, member = 754.849
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = median) #casual = 770, member = 524
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = max)  #casual = 2483235, member = 89998
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = min) #casual = 0, member = 0
+# Initial insight is that casual riders spend over twice as long per ride
+
+# See the average ride time by each day for members vs casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+# Notice that the days of the week and months are out of order. Let's fix that.
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels
+                                    =c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+all_trips_v2$month <- ordered(all_trips_v2$month, levels 
+                                    = c("January", "February", "March", "April", "May", "June", "July","August","September","October" , "November","December"))
+
+
+# Now, let's run the average ride time by each day for members vs casual users
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+# next conclusion is that casual riders have longer ride times on Saturday and Sunday and times get shorter the closer to Wednesday. 
+# Members' time stay very consistent with slight increase on Saturday and Sunday. 
+
+colnames(all_trips_v2)
+
+# analyze ridership data by type and weekday
+all_trips_v2 %>% 
+  mutate(weekday = lubridate::wday(started_at, label = TRUE)) %>%  #creates weekday field using wday() #needed to use lubridate::wday
+  group_by(member_casual, weekday) %>%  #groups by usertype and weekday
+  summarise(number_of_rides = n()							#calculates the number of rides and average duration 
+            ,average_duration = mean(ride_length)) %>% 		# calculates the average duration
+  arrange(member_casual, weekday)								# sorts
+
+# Graph 1. Let's visualize the number of rides by rider type
+all_trips_v2 %>% # Can't use Rides_number_Member <- all_trips_v2 %>% as first row due to some update
+  mutate(weekday = lubridate::wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarise(number_of_rides = n(),average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  labs(title = "Number of Rides: Member vs Casual", subtitle = "Per Day of Week",caption =  
+         "Data publicly available") +
+  geom_col(position = "dodge")
+
+# Graph 2. Let's create a visualization for average duration
+all_trips_v2 %>%   #Can't use Duration_Member_vs_Casual <- all_trips_v2 %>% as first row due to some update
+  mutate(weekday = lubridate::wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,.groups = 'drop',average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")+
+  labs(title = "Ride Duration: Member vs Casual", subtitle = "Per Day of Week",caption =  
+       "Data publicly available")
+
+ counts <- aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+write.csv(counts, file = "avg_ride_length.csv")
+write.csv(all_trips_v2, file = "all_trips_v2.csv")
+
+#Compare Rides_number_Member with time of year. This will show holiday usage. 
+#Compare "rideable_type" with "member_casual"
+#Compare 
+
+# Graph 3. 
+colnames(all_trips_v2)
+all_trips_v2 %>% 
+  group_by(month) %>%  
+  summarise(number_of_rides = n())
+
+all_trips_v2 %>% 
+  group_by(member_casual, month) %>%  
+  summarise(number_of_rides = n()) %>%
+  arrange(member_casual, month) %>% 
+  ggplot(aes(x = month, y = number_of_rides, fill=member_casual))+
+  theme(axis.text.x = element_text(angle = 45)) +
+  labs(title = "Number of Rides Monthly", subtitle = "Member vs Casual",caption =  
+         "Data publicly available")+
+  geom_col(position = "dodge")
+
+# Graph 4
+all_trips_v2 %>% 
+  group_by(member_casual, month) %>% 
+  summarise(number_of_rides = n(),average_ride_length = mean(ride_length)) %>% 
+  arrange(member_casual, month) %>% 
+  ggplot(aes(x = month, y = average_ride_length, fill=member_casual))+
+  theme(axis.text.x = element_text(angle = 45)) +
+  labs(title = "Average Duration Monthly", subtitle = "Member vs Casual",
+       caption =  "Data publicly available")+ 
+  geom_col(position = "dodge")
+
+# Graph 5. 
+all_trips_v2 %>% 
+  ggplot(mapping = aes(x = date, fill = member_casual))+
+  geom_bar(position = "dodge") +
+  facet_wrap(~member_casual, nrow = 2) +
+  theme(axis.text.x = element_text(angle = 55)) +
+  scale_x_date(date_breaks = "1 months", date_labels = "%d-%b-%y") +
+  labs(title = "Number of rides for 12 months", subtitle = "Casual vs Member", 
+       caption = "Data publicly available")
